@@ -1,0 +1,38 @@
+/****
+    Test : 1
+    Count of Contacts related to an Account
+	Before running this trigger create new field on Account named "No of Contacts (No_of_Contacts__c)"
+****/
+
+trigger ContactsOnAccount on Contact (after insert, after update, after delete, after undelete) {
+    //on delete we use Trigger.Old else, Trigger.new
+    List<Contact> contactList = Trigger.isDelete ? Trigger.old : Trigger.new;
+
+	//For Unique Account Ids
+    Set<Id> acctIds = new Set<Id>();
+   
+    for (Contact c : contactList) {
+     // Check for Null (Contact without Account Id)
+        if (c.AccountId != null) {
+            acctIds.add(c.AccountId);
+        }
+    }
+   
+    List<Account> acctsToRollup = new List<Account>();
+    
+    for (AggregateResult ar : [SELECT AccountId AcctId, Count(id) No_of_Contacts__c 
+                               FROM Contact 
+                               WHERE AccountId in: acctIds 
+                               GROUP BY AccountId]){
+        Account a = new Account();
+        a.Id = (Id) ar.get('AcctId'); //---> handy trick for updates, set the id and update
+        a.No_of_Contacts__c = (Integer) ar.get('No_of_Contacts__c');
+        acctsToRollup.add(a);
+    }
+    
+	try{
+        update acctsToRollup;
+    }catch(System.Exception e){
+        system.debug('Exception in ContactonAccount Trigger' +e.getMessage());
+    }
+}
